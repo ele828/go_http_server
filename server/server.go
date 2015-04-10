@@ -60,8 +60,6 @@ func (this *Server) routerHandler(uri string, conn net.Conn) {
 
 	if uri == "/" {
 		uri = "/index.html"
-	} else if uri == "/favicon.ico" {
-		uri = "/index.html"
 	}
 
 	path := this.path + uri
