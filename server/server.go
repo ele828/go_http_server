@@ -49,8 +49,10 @@ func (this *Server) Listen(port string) {
 		checkError(err)
 
 		go func(conn net.Conn) {
-			uri := requestHandler(conn)
-			this.routerHandler(uri, conn)
+			uri, err := requestHandler(conn)
+			if err == nil {
+				this.routerHandler(uri, conn)
+			}
 		}(conn)
 	}
 }
@@ -60,16 +62,22 @@ func (this *Server) routerHandler(uri string, conn net.Conn) {
 
 	if uri == "/" {
 		uri = "/index.html"
+	} else if uri == "/favicon.ico" {
+		uri = "/index.html"
 	}
 
 	path := this.path + uri
 	content, err := readStaticFile(path)
+	mime := getMime(uri)
 
 	// 打开失败或文件不存在，返回404页面
 	if err != nil {
-		handle404(conn)
+		content, err = readStaticFile(path + "index.html")
+		mime = getMime("index.html")
+		if err != nil {
+			handle404(conn)
+		}
 	}
-	mime := getMime(uri)
 
 	header := "HTTP/1.0 200 OK\r\n" +
 		"Server: Go_Server 1.0\r\n" +
@@ -81,31 +89,33 @@ func (this *Server) routerHandler(uri string, conn net.Conn) {
 	conn.Write([]byte(content))
 
 	conn.Close()
-	return
 }
 
 // 请求处理
-func requestHandler(conn net.Conn) string {
+func requestHandler(conn net.Conn) (string, error) {
 
 	buf := make([]byte, 1024)
 	_, err := conn.Read(buf)
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
+		conn.Close()
+		return "", err
 	}
 	req := string(buf)
 	st := strings.Split(req, "GET ")
 	token := strings.Split(st[1], "HTTP/1.1")[0]
 	uri := strings.Trim(token, " ")
 	//	fmt.Println(uri)
-	return uri
+	return uri, nil
 }
 
 // 获取MIME类型
 func getMime(file string) string {
 	if strings.Contains(file, ".") {
 		fileType := strings.Split(file, ".")[1]
-		mime := MimeMap[fileType]
-		return mime
+		if mime, ok := MimeMap[fileType]; ok {
+			return mime
+		}
 	}
 	return "text/plain"
 }
